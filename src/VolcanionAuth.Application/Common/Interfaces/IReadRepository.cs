@@ -15,4 +15,8 @@ public interface IReadRepository<T> where T : class
     Task<IReadOnlyList<Permission>> GetUserPermissionsAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Policy>> GetActivePoliciesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<UserRelationship>> GetUserRelationshipsAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<Role?> GetRoleWithPermissionsAsync(Guid roleId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Role>> GetAllRolesWithPermissionsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<User>> GetAllUsersWithPermissionsAsync(CancellationToken cancellationToken = default);
+    Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken = default);
 }

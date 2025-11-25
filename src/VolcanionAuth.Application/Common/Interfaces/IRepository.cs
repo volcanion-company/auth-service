@@ -1,4 +1,5 @@
 using VolcanionAuth.Domain.Common;
+using VolcanionAuth.Domain.Entities;
 using System.Linq.Expressions;
 
 namespace VolcanionAuth.Application.Common.Interfaces;
@@ -17,4 +18,13 @@ public interface IRepository<T> where T : class
     void Remove(T entity);
     Task<bool> AnyAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
     Task<int> CountAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// User repository interface with specialized methods
+/// </summary>
+public interface IUserRepository : IRepository<User>
+{
+    Task<User?> GetUserByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<User?> GetUserByEmailWithRolesAsync(string email, CancellationToken cancellationToken = default);
 }

@@ -53,5 +53,5 @@ Thumbs.db
 ## Secrets
 appsettings.*.json
 !appsettings.json
-!appsettings.Development.json
+appsettings.Development.json
 secrets.json

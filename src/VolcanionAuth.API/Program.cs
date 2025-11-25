@@ -8,6 +8,10 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Prometheus;
 using Serilog;
+using VolcanionAuth.API.Conventions;
+using VolcanionAuth.API.Extensions;
+using VolcanionAuth.API.Middleware;
+using VolcanionAuth.API.Services;
 using VolcanionAuth.Application;
 using VolcanionAuth.Infrastructure;
 
@@ -20,13 +24,20 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.WithMachineName()
     .Enrich.WithThreadId()
     .WriteTo.Console()
-    .WriteTo.File("logs/volcanion-auth-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(
+        path: "logs/volcanion-auth-.txt",
+        rollingInterval: RollingInterval.Day,
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
     .CreateLogger();
 
 builder.Host.UseSerilog();
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    // Apply kebab-case route convention globally
+    options.Conventions.Add(new KebabCaseRouteConvention());
+});
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure JWT Authentication
@@ -66,6 +77,9 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1",
         Description = "Authentication and Authorization API using DDD architecture"
     });
+
+    // Custom schema ID to avoid conflicts with duplicate type names
+    c.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
 
     // Add JWT authentication to Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -108,11 +122,19 @@ builder.Services.AddApiVersioning(options =>
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
 });
 
 // Add Application & Infrastructure layers
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Add HttpContextAccessor and UserContextService
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUserContextService, UserContextService>();
 
 // Health Checks
 builder.Services.AddHealthChecks()
@@ -132,15 +154,25 @@ builder.Services.AddHealthChecks()
 // CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowSpecificOrigins", policy =>
     {
-        policy.AllowAnyOrigin()
+        var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? ["http://localhost:3000", "http://localhost:3001"];
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials();
     });
 });
 
 var app = builder.Build();
+
+// Initialize database (migrations and optional seeding)
+// Check for command-line argument to seed database
+var seedDatabase = args.Contains("seed") || args.Contains("--seed");
+if (app.Environment.IsDevelopment() && seedDatabase)
+{
+    await app.SeedDatabaseAsync();
+}
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
@@ -153,14 +185,20 @@ app.UseSerilogRequestLogging();
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowAll");
+app.UseCors("AllowSpecificOrigins");
 
 // Prometheus metrics
 app.UseMetricServer();
 app.UseHttpMetrics();
 
+// Custom middleware pipeline
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<JwtAuthenticationMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseMiddleware<UserContextMiddleware>();
 
 app.MapControllers();
 
