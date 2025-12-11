@@ -23,6 +23,8 @@ public interface IRepository<T> where T : class
     /// <returns>A task that represents the asynchronous operation. The task result contains the entity of type T if found;
     /// otherwise, null.</returns>
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Role?> GetRoleWithPermissionsAsync(Guid roleId, CancellationToken cancellationToken = default);
+    Task<User?> GetUserWithRolesAsync(Guid userId, CancellationToken cancellationToken = default);
     /// <summary>
     /// Asynchronously retrieves all entities of type T from the data source.
     /// </summary>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using VolcanionAuth.API.Filters;
 using VolcanionAuth.Application.Features.RoleManagement.Commands.CreateRole;
 using VolcanionAuth.Application.Features.RoleManagement.Commands.DeleteRole;
+using VolcanionAuth.Application.Features.RoleManagement.Commands.GrantPermissions;
 using VolcanionAuth.Application.Features.RoleManagement.Commands.ToggleRoleStatus;
 using VolcanionAuth.Application.Features.RoleManagement.Commands.UpdateRole;
 using VolcanionAuth.Application.Features.RoleManagement.Queries.GetAllRoles;
@@ -249,6 +250,46 @@ public class RoleManagementController(IMediator mediator, ILogger<RoleManagement
         // Return the successful result
         return Ok(result.Value);
     }
+
+    /// <summary>
+    /// Grants a set of permissions to a role, replacing all existing permissions.
+    /// </summary>
+    /// <remarks>Requires the 'roles:write' permission. This endpoint replaces all existing permissions with the
+    /// provided set. Returns HTTP 200 OK with the updated role details on success, HTTP 400 Bad Request if any
+    /// permission IDs are invalid, HTTP 404 Not Found if the role does not exist, or HTTP 403 Forbidden if the user
+    /// lacks permission.</remarks>
+    /// <param name="roleId">The unique identifier of the role to grant permissions to.</param>
+    /// <param name="request">An object containing the list of permission IDs to grant to the role.</param>
+    /// <returns>An <see cref="IActionResult"/> containing the updated role details if successful; otherwise, an error response.</returns>
+    [HttpPut("{roleId}/grant-permissions")]
+    [RequirePermission("roles:write")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GrantPermissions(Guid roleId, [FromBody] GrantPermissionsRequest request)
+    {
+        // Log the incoming request for debugging purposes
+        logger.LogDebug("Granting permissions to role: {RoleId}, Permission count: {Count}", roleId, request.PermissionIds.Count);
+        
+        // Create the command object with the role ID and permission IDs
+        var command = new GrantPermissionsCommand(roleId, request.PermissionIds);
+
+        // Send the command to the mediator and await the result
+        var result = await mediator.Send(command);
+        if (result.IsFailure)
+        {
+            // Check if the error indicates that the role was not found
+            if (result.Error.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new { error = result.Error });
+            }
+            // Return a Bad Request response for other errors
+            return BadRequest(new { error = result.Error });
+        }
+        // Return the successful result
+        return Ok(result.Value);
+    }
 }
 
 /// <summary>
@@ -257,3 +298,9 @@ public class RoleManagementController(IMediator mediator, ILogger<RoleManagement
 /// <param name="IsActive">A value indicating whether the role should be set as active. Specify <see langword="true"/> to activate the role;
 /// otherwise, <see langword="false"/> to deactivate it.</param>
 public record ToggleRoleStatusRequest(bool IsActive);
+
+/// <summary>
+/// Represents a request to grant permissions to a role.
+/// </summary>
+/// <param name="PermissionIds">The list of permission identifiers to grant to the role.</param>
+public record GrantPermissionsRequest(List<Guid> PermissionIds);

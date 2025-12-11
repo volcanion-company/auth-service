@@ -41,6 +41,22 @@ public class Repository<T>(WriteDbContext context) : IRepository<T> where T : cl
         return await _dbSet.FindAsync([id], cancellationToken);
     }
 
+    public virtual async Task<Role?> GetRoleWithPermissionsAsync(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Set<Role>()
+            .Include(r => r.RolePermissions)
+                .ThenInclude(rp => rp.Permission)
+            .FirstOrDefaultAsync(r => r.Id == roleId, cancellationToken);
+    }
+
+    public virtual async Task<User?> GetUserWithRolesAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Set<User>()
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+    }
+
     /// <summary>
     /// Asynchronously retrieves all entities of type T from the data source.
     /// </summary>

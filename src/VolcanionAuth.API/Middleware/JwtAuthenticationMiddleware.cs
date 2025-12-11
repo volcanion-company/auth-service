@@ -59,9 +59,7 @@ public class JwtAuthenticationMiddleware(
                     context.Items["UserEmail"] = email;
                     context.Items["UserRoles"] = roles;
 
-                    logger.LogDebug(
-                        "JWT validated: UserId={UserId}, Email={Email}, Roles={Roles}",
-                        userId, email, string.Join(",", roles));
+                    logger.LogDebug("JWT validated: UserId={UserId}, Email={Email}, Roles={Roles}", userId, email, string.Join(",", roles));
                 }
             }
             catch (SecurityTokenExpiredException)
