@@ -12,6 +12,8 @@ namespace VolcanionAuth.Application.Features.Authentication.Commands.LoginUser;
 /// safety and transactional integrity are maintained through the use of the unit of work pattern.</remarks>
 /// <param name="userRepository">The user repository used to retrieve and update user entities, including roles and login history.</param>
 /// <param name="readRepository">The read-only repository for accessing user permissions and related data.</param>
+/// <param name="loginHistoryRepository">The repository for managing login history records.</param>
+/// <param name="refreshTokenRepository">The repository for managing refresh tokens.</param>
 /// <param name="passwordHasher">The service used to verify user passwords against stored password hashes.</param>
 /// <param name="jwtTokenService">The service responsible for generating access and refresh JWT tokens for authenticated users.</param>
 /// <param name="unitOfWork">The unit of work used to persist changes to the data store as part of the login process.</param>
@@ -19,6 +21,8 @@ namespace VolcanionAuth.Application.Features.Authentication.Commands.LoginUser;
 public class LoginUserCommandHandler(
     IUserRepository userRepository,
     IReadRepository<User> readRepository,
+    IRepository<LoginHistory> loginHistoryRepository,
+    IRepository<Domain.Entities.RefreshToken> refreshTokenRepository,
     IPasswordHasher passwordHasher,
     IJwtTokenService jwtTokenService,
     IUnitOfWork unitOfWork,
@@ -52,21 +56,30 @@ public class LoginUserCommandHandler(
         // Verify password
         if (!passwordHasher.VerifyPassword(request.Password, user.Password.Hash))
         {
-            // Record failed login
-            user.RecordFailedLogin(request.IpAddress, request.UserAgent);
+            // Update user state for failed login
+            user.UpdateFailedLoginState();
+            
+            // Create and add login history separately
+            var failedLoginHistory = LoginHistory.Create(user.Id, request.IpAddress, request.UserAgent, false);
+            await loginHistoryRepository.AddAsync(failedLoginHistory, cancellationToken);
+            
             // Save changes for failed login attempt
             await unitOfWork.SaveChangesAsync(cancellationToken);
             // Return generic error message
             return Result.Failure<LoginUserResponse>("Invalid credentials.");
         }
 
-        // Record successful login
-        var loginResult = user.RecordSuccessfulLogin(request.IpAddress, request.UserAgent);
+        // Update user state for successful login (without adding to collections)
+        var loginResult = user.UpdateSuccessfulLoginState(request.IpAddress);
         if (loginResult.IsFailure)
         {
-            // Return failure if recording login failed
+            // Return failure if updating login state failed
             return Result.Failure<LoginUserResponse>(loginResult.Error);
         }
+
+        // Create and add login history separately
+        var successLoginHistory = LoginHistory.Create(user.Id, request.IpAddress, request.UserAgent, true);
+        await loginHistoryRepository.AddAsync(successLoginHistory, cancellationToken);
 
         // Get user permissions from read repository
         var permissions = await readRepository.GetUserPermissionsAsync(user.Id, cancellationToken);
@@ -80,9 +93,13 @@ public class LoginUserCommandHandler(
         var refreshToken = jwtTokenService.GenerateRefreshToken();
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
-        // Create refresh token
-        user.CreateRefreshToken(refreshToken, expiresAt);
+        // Create and add refresh token separately (not through User entity)
+        var newRefreshToken = Domain.Entities.RefreshToken.Create(user.Id, refreshToken, expiresAt);
+        await refreshTokenRepository.AddAsync(newRefreshToken, cancellationToken);
 
+        // NO need to call Update - EF Core will auto-detect changes to User entity properties
+        // The user entity is already tracked from GetUserByEmailWithRolesAsync
+        
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Cache user session

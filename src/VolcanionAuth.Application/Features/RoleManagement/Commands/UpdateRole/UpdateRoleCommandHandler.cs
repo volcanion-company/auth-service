@@ -33,8 +33,8 @@ public class UpdateRoleCommandHandler(
     /// with an error message describing why the update could not be completed.</returns>
     public async Task<Result<RoleDto>> Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
     {
-        // Find the role
-        var role = await readRoleRepository.GetByIdAsync(request.RoleId, cancellationToken);
+        // Find the role from WRITE repository
+        var role = await roleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
         if (role == null)
         {
             return Result.Failure<RoleDto>($"Role with ID '{request.RoleId}' was not found");
@@ -92,11 +92,10 @@ public class UpdateRoleCommandHandler(
             }
         }
 
-        // Save changes
-        roleRepository.Update(role);
+        // NO need to call Update - entity is already tracked
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Reload role with permissions
+        // Reload role with permissions for DTO mapping
         var updatedRole = await readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
 
         // Map to DTO

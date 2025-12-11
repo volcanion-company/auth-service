@@ -11,11 +11,9 @@ namespace VolcanionAuth.Application.Features.PolicyManagement.Commands.TogglePol
 /// and returns the updated policy as a data transfer object. The operation is transactional and ensures that changes
 /// are saved atomically.</remarks>
 /// <param name="policyRepository">The repository used to update policy entities in the data store.</param>
-/// <param name="readPolicyRepository">The repository used to retrieve policy entities for read operations.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store as part of the operation.</param>
 public class TogglePolicyStatusCommandHandler(
     IRepository<Policy> policyRepository,
-    IReadRepository<Policy> readPolicyRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<TogglePolicyStatusCommand, Result<PolicyDto>>
 {
     /// <summary>
@@ -27,8 +25,8 @@ public class TogglePolicyStatusCommandHandler(
     /// result with an error message if the policy is not found.</returns>
     public async Task<Result<PolicyDto>> Handle(TogglePolicyStatusCommand request, CancellationToken cancellationToken)
     {
-        // Find the policy
-        var policy = await readPolicyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
+        // Find the policy from WRITE repository
+        var policy = await policyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
         if (policy == null)
         {
             return Result.Failure<PolicyDto>($"Policy with ID '{request.PolicyId}' was not found");
@@ -44,8 +42,7 @@ public class TogglePolicyStatusCommandHandler(
             policy.Deactivate();
         }
 
-        // Save changes
-        policyRepository.Update(policy);
+        // NO need to call Update - entity is already tracked
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Map to DTO
