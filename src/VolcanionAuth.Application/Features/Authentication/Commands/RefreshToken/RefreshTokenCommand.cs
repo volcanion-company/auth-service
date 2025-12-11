@@ -1,12 +1,7 @@
-using MediatR;
-using VolcanionAuth.Domain.Common;
-
 namespace VolcanionAuth.Application.Features.Authentication.Commands.RefreshToken;
 
 /// <summary>
-/// Represents a command to refresh an access token using a valid refresh token.
+/// Represents a request to obtain a new access token using a refresh token.
 /// </summary>
-/// <param name="RefreshToken">The refresh token to validate and use for generating a new access token.</param>
-public record RefreshTokenCommand(
-    string RefreshToken
-) : IRequest<Result<RefreshTokenResponse>>;
+/// <param name="RefreshToken">The refresh token used to authenticate the request and generate a new access token. Cannot be null or empty.</param>
+public record RefreshTokenCommand(string RefreshToken) : IRequest<Result<RefreshTokenResponse>>;

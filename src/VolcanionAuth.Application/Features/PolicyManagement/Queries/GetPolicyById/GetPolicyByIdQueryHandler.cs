@@ -5,21 +5,26 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.PolicyManagement.Queries.GetPolicyById;
 
 /// <summary>
-/// Handler for retrieving detailed information about a specific policy.
+/// Handles queries to retrieve a policy by its unique identifier and returns the result as a data transfer object
+/// (DTO).
 /// </summary>
-public class GetPolicyByIdQueryHandler : IRequestHandler<GetPolicyByIdQuery, Result<PolicyDto>>
+/// <remarks>This handler is typically used in request-response patterns to fetch policy details for display or
+/// further processing. The returned result indicates success or failure, with an appropriate message if the policy is
+/// not found.</remarks>
+/// <param name="policyRepository">The repository used to access and retrieve policy entities from the data store.</param>
+public class GetPolicyByIdQueryHandler(IReadRepository<Policy> policyRepository) : IRequestHandler<GetPolicyByIdQuery, Result<PolicyDto>>
 {
-    private readonly IReadRepository<Policy> _policyRepository;
-
-    public GetPolicyByIdQueryHandler(IReadRepository<Policy> policyRepository)
-    {
-        _policyRepository = policyRepository;
-    }
-
+    /// <summary>
+    /// Retrieves a policy by its unique identifier and returns the corresponding policy data transfer object.
+    /// </summary>
+    /// <param name="request">The query containing the unique identifier of the policy to retrieve.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing the policy data transfer object if found; otherwise, a failure result indicating that the
+    /// policy was not found.</returns>
     public async Task<Result<PolicyDto>> Handle(GetPolicyByIdQuery request, CancellationToken cancellationToken)
     {
         // Find the policy by ID
-        var policy = await _policyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
+        var policy = await policyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
 
         if (policy == null)
         {

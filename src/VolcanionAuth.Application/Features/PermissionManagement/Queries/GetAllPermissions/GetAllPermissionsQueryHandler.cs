@@ -5,10 +5,26 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.PermissionManagement.Queries.GetAllPermissions;
 
 /// <summary>
-/// Handler for retrieving a paginated list of all permissions.
+/// Handles queries to retrieve all permissions, grouped by resource, with support for filtering and pagination.
 /// </summary>
+/// <remarks>This handler supports filtering permissions by resource and search term, and paginates results based
+/// on resource groups. It is typically used to provide a paginated, grouped view of permissions for administrative or
+/// management interfaces.</remarks>
+/// <param name="permissionRepository">The repository used to access and retrieve permission entities from the data store.</param>
 public class GetAllPermissionsQueryHandler(IReadRepository<Permission> permissionRepository) : IRequestHandler<GetAllPermissionsQuery, Result<PaginatedPermissionResponse>>
 {
+    /// <summary>
+    /// Retrieves a paginated list of permissions grouped by resource, optionally filtered by resource name and search
+    /// term.
+    /// </summary>
+    /// <remarks>The returned permissions are grouped by resource and sorted alphabetically. Filtering by
+    /// resource and search term is case-insensitive. Pagination is applied to resource groups, not individual
+    /// permissions.</remarks>
+    /// <param name="request">The query parameters specifying pagination, resource filtering, and search criteria for retrieving permissions.
+    /// The page number must be greater than 0, and the page size must be between 1 and 100.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing a paginated response with permissions grouped by resource. Returns a failure result if
+    /// pagination parameters are invalid.</returns>
     public async Task<Result<PaginatedPermissionResponse>> Handle(GetAllPermissionsQuery request, CancellationToken cancellationToken)
     {
         // Validate pagination parameters
@@ -66,7 +82,7 @@ public class GetAllPermissionsQueryHandler(IReadRepository<Permission> permissio
         // Map to DTOs
         var permissionsByResource = paginatedGroups.Select(g => new PermissionsByResourceDto(
             g.Resource,
-            g.Permissions.Select(p => new PermissionDto(
+            [.. g.Permissions.Select(p => new PermissionDto(
                 p.Id,
                 p.Resource,
                 p.Action,
@@ -74,7 +90,7 @@ public class GetAllPermissionsQueryHandler(IReadRepository<Permission> permissio
                 p.Description,
                 p.CreatedAt,
                 p.RolePermissions.Count
-            )).ToList()
+            ))]
         )).ToList();
 
         var response = new PaginatedPermissionResponse(
