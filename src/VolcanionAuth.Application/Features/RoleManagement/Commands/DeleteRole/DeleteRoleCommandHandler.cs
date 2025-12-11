@@ -11,11 +11,9 @@ namespace VolcanionAuth.Application.Features.RoleManagement.Commands.DeleteRole;
 /// does not exist or is assigned to one or more users, the operation fails and returns an appropriate error
 /// message.</remarks>
 /// <param name="roleRepository">The repository used to perform write operations on role entities, such as removing a role.</param>
-/// <param name="readRoleRepository">The repository used to perform read operations on role entities, such as retrieving a role by its identifier.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store after the role is deleted.</param>
 public class DeleteRoleCommandHandler(
     IRepository<Role> roleRepository,
-    IReadRepository<Role> readRoleRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<DeleteRoleCommand, Result>
 {
     /// <summary>
@@ -30,8 +28,8 @@ public class DeleteRoleCommandHandler(
     /// exist or is assigned to users.</returns>
     public async Task<Result> Handle(DeleteRoleCommand request, CancellationToken cancellationToken)
     {
-        // Find the role
-        var role = await readRoleRepository.GetByIdAsync(request.RoleId, cancellationToken);
+        // Find the role from WRITE repository with UserRoles loaded
+        var role = await roleRepository.GetRoleWithUsersAsync(request.RoleId, cancellationToken);
         if (role == null)
         {
             return Result.Failure($"Role with ID '{request.RoleId}' was not found");

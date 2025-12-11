@@ -11,11 +11,9 @@ namespace VolcanionAuth.Application.Features.UserManagement.Commands.UpdateUser;
 /// updates are validated and persisted atomically. Thread safety and transactional integrity are managed via the
 /// provided unit of work.</remarks>
 /// <param name="userRepository">The repository used to update user entities in persistent storage.</param>
-/// <param name="readUserRepository">The repository used to retrieve user entities for read operations.</param>
 /// <param name="unitOfWork">The unit of work used to persist changes to the data store as part of the update operation.</param>
 public class UpdateUserCommandHandler(
     IRepository<User> userRepository,
-    IReadRepository<User> readUserRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<UpdateUserCommand, Result<UpdateUserResponse>>
 {
     /// <summary>
@@ -29,8 +27,8 @@ public class UpdateUserCommandHandler(
     /// error message.</returns>
     public async Task<Result<UpdateUserResponse>> Handle(UpdateUserCommand request, CancellationToken cancellationToken)
     {
-        // Find the user
-        var user = await readUserRepository.GetByIdAsync(request.UserId, cancellationToken);
+        // Find the user from WRITE repository (for tracking)
+        var user = await userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (user == null)
         {
             return Result.Failure<UpdateUserResponse>($"User with ID '{request.UserId}' was not found");
@@ -55,8 +53,7 @@ public class UpdateUserCommandHandler(
             }
         }
 
-        // Save changes
-        userRepository.Update(user);
+        // NO need to call Update - entity is already tracked by write repository
         // Persist changes
         await unitOfWork.SaveChangesAsync(cancellationToken);
         // Return updated user info

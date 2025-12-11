@@ -10,11 +10,9 @@ namespace VolcanionAuth.Application.Features.UserManagement.Commands.DeleteUser;
 /// operation fails and no changes are made. The deletion is committed atomically using the provided unit of
 /// work.</remarks>
 /// <param name="userRepository">The repository used to remove user entities from persistent storage.</param>
-/// <param name="readUserRepository">The repository used to retrieve user entities for read operations.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store after the user is deleted.</param>
 public class DeleteUserCommandHandler(
     IRepository<User> userRepository,
-    IReadRepository<User> readUserRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<DeleteUserCommand, Result>
 {
     /// <summary>
@@ -26,8 +24,8 @@ public class DeleteUserCommandHandler(
     /// exist.</returns>
     public async Task<Result> Handle(DeleteUserCommand request, CancellationToken cancellationToken)
     {
-        // Find the user
-        var user = await readUserRepository.GetByIdAsync(request.UserId, cancellationToken);
+        // Find the user from WRITE repository
+        var user = await userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (user == null)
         {
             return Result.Failure($"User with ID '{request.UserId}' was not found");

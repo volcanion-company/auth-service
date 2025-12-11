@@ -249,6 +249,34 @@ public class User : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Updates user state for a successful login without adding to login history collection.
+    /// Use this when LoginHistory will be added separately to avoid EF Core tracking issues.
+    /// </summary>
+    public Result UpdateSuccessfulLoginState(string ipAddress)
+    {
+        // Check if the user account is active
+        if (!IsActive)
+        {
+            return Result.Failure("User account is not active.");
+        }
+        // Check if the user account is locked
+        if (IsLocked && LockedUntil.HasValue && LockedUntil.Value > DateTime.UtcNow)
+        {
+            return Result.Failure($"Account is locked until {LockedUntil.Value}.");
+        }
+
+        // Reset failed login attempts and unlock the account
+        FailedLoginAttempts = 0;
+        IsLocked = false;
+        LockedUntil = null;
+        LastLoginAt = DateTime.UtcNow;
+
+        // Raise the domain event
+        AddDomainEvent(new UserLoggedInEvent(Id, ipAddress));
+        return Result.Success();
+    }
+
+    /// <summary>
     /// Records a failed login attempt for the user and updates the account's lockout status if necessary.
     /// </summary>
     /// <remarks>If the number of consecutive failed login attempts reaches the configured threshold, the
@@ -281,6 +309,28 @@ public class User : AggregateRoot<Guid>
         }
 
         // Return failure indicating invalid credentials
+        return Result.Failure("Invalid credentials.");
+    }
+
+    /// <summary>
+    /// Updates user state for a failed login without adding to login history collection.
+    /// Use this when LoginHistory will be added separately to avoid EF Core tracking issues.
+    /// </summary>
+    public Result UpdateFailedLoginState()
+    {
+        FailedLoginAttempts++;
+
+        // Check if the account should be locked
+        if (FailedLoginAttempts >= 5)
+        {
+            // Lock the account for 30 minutes
+            IsLocked = true;
+            LockedUntil = DateTime.UtcNow.AddMinutes(30);
+            // Raise the domain event
+            AddDomainEvent(new UserLockedEvent(Id, LockedUntil.Value));
+            return Result.Failure("Account has been locked due to multiple failed login attempts.");
+        }
+
         return Result.Failure("Invalid credentials.");
     }
 

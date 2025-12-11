@@ -10,11 +10,9 @@ namespace VolcanionAuth.Application.Features.PolicyManagement.Commands.DeletePol
 /// exist, the operation fails and returns an appropriate result. The handler ensures that changes are persisted using
 /// the provided unit of work.</remarks>
 /// <param name="policyRepository">The repository used to perform write operations on policy entities.</param>
-/// <param name="readPolicyRepository">The repository used to retrieve policy entities for read-only operations.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store.</param>
 public class DeletePolicyCommandHandler(
     IRepository<Policy> policyRepository,
-    IReadRepository<Policy> readPolicyRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<DeletePolicyCommand, Result>
 {
     /// <summary>
@@ -26,8 +24,8 @@ public class DeletePolicyCommandHandler(
     /// exist.</returns>
     public async Task<Result> Handle(DeletePolicyCommand request, CancellationToken cancellationToken)
     {
-        // Find the policy
-        var policy = await readPolicyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
+        // Find the policy from WRITE repository
+        var policy = await policyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
         if (policy == null)
         {
             return Result.Failure($"Policy with ID '{request.PolicyId}' was not found");

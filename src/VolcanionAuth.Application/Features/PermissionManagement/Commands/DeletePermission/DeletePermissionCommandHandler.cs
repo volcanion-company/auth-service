@@ -10,11 +10,9 @@ namespace VolcanionAuth.Application.Features.PermissionManagement.Commands.Delet
 /// <remarks>This handler enforces that a permission cannot be deleted if it is currently assigned to one or more
 /// roles. The operation is transactional and changes are committed only if the deletion is valid.</remarks>
 /// <param name="permissionRepository">The repository used to remove permission entities from persistent storage.</param>
-/// <param name="readPermissionRepository">The read-only repository used to retrieve permission entities for validation prior to deletion.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store after a permission is deleted.</param>
 public class DeletePermissionCommandHandler(
     IRepository<Permission> permissionRepository,
-    IReadRepository<Permission> readPermissionRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<DeletePermissionCommand, Result>
 {
     /// <summary>
@@ -28,8 +26,8 @@ public class DeletePermissionCommandHandler(
     /// does not exist or is assigned to one or more roles.</returns>
     public async Task<Result> Handle(DeletePermissionCommand request, CancellationToken cancellationToken)
     {
-        // Find the permission
-        var permission = await readPermissionRepository.GetByIdAsync(request.PermissionId, cancellationToken);
+        // Find the permission from WRITE repository with RolePermissions loaded
+        var permission = await permissionRepository.GetPermissionWithRolesAsync(request.PermissionId, cancellationToken);
         if (permission == null)
         {
             return Result.Failure($"Permission with ID '{request.PermissionId}' was not found");

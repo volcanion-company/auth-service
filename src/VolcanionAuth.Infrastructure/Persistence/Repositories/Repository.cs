@@ -49,6 +49,22 @@ public class Repository<T>(WriteDbContext context) : IRepository<T> where T : cl
             .FirstOrDefaultAsync(r => r.Id == roleId, cancellationToken);
     }
 
+    public virtual async Task<Role?> GetRoleWithUsersAsync(Guid roleId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Set<Role>()
+            .Include(r => r.UserRoles)
+                .ThenInclude(ur => ur.User)
+            .FirstOrDefaultAsync(r => r.Id == roleId, cancellationToken);
+    }
+
+    public virtual async Task<Permission?> GetPermissionWithRolesAsync(Guid permissionId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Set<Permission>()
+            .Include(p => p.RolePermissions)
+                .ThenInclude(rp => rp.Role)
+            .FirstOrDefaultAsync(p => p.Id == permissionId, cancellationToken);
+    }
+
     public virtual async Task<User?> GetUserWithRolesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _context.Set<User>()

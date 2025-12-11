@@ -10,11 +10,9 @@ namespace VolcanionAuth.Application.Features.UserManagement.Commands.ToggleUserS
 /// indicating success or failure, including details about the user's new status. The operation is asynchronous and
 /// supports cancellation via the provided token.</remarks>
 /// <param name="userRepository">The repository used to update user entities in the data store.</param>
-/// <param name="readUserRepository">The repository used to retrieve user entities for read operations.</param>
 /// <param name="unitOfWork">The unit of work used to persist changes to the data store.</param>
 public class ToggleUserStatusCommandHandler(
     IRepository<User> userRepository,
-    IReadRepository<User> readUserRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<ToggleUserStatusCommand, Result<ToggleUserStatusResponse>>
 {
     /// <summary>
@@ -28,8 +26,8 @@ public class ToggleUserStatusCommandHandler(
     /// user is not found.</returns>
     public async Task<Result<ToggleUserStatusResponse>> Handle(ToggleUserStatusCommand request, CancellationToken cancellationToken)
     {
-        // Find the user
-        var user = await readUserRepository.GetByIdAsync(request.UserId, cancellationToken);
+        // Find the user from WRITE repository (for tracking)
+        var user = await userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (user == null)
         {
             return Result.Failure<ToggleUserStatusResponse>($"User with ID '{request.UserId}' was not found");
@@ -45,8 +43,7 @@ public class ToggleUserStatusCommandHandler(
             user.Deactivate();
         }
 
-        // Save changes
-        userRepository.Update(user);
+        // NO need to call Update - entity is already tracked by write repository
         // Persist changes atomically
         await unitOfWork.SaveChangesAsync(cancellationToken);
         // Return response

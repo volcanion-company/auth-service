@@ -31,8 +31,8 @@ public class UpdatePolicyCommandHandler(
     /// message.</returns>
     public async Task<Result<PolicyDto>> Handle(UpdatePolicyCommand request, CancellationToken cancellationToken)
     {
-        // Find the policy
-        var policy = await readPolicyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
+        // Find the policy from WRITE repository
+        var policy = await policyRepository.GetByIdAsync(request.PolicyId, cancellationToken);
         if (policy == null)
         {
             return Result.Failure<PolicyDto>($"Policy with ID '{request.PolicyId}' was not found");
@@ -73,8 +73,7 @@ public class UpdatePolicyCommandHandler(
             return Result.Failure<PolicyDto>(updateResult.Error);
         }
 
-        // Save changes
-        policyRepository.Update(policy);
+        // NO need to call Update - entity is already tracked
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Map to DTO
