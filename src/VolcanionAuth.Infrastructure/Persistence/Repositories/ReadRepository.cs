@@ -112,13 +112,18 @@ public class ReadRepository<T>(ReadDbContext context) : IReadRepository<T> where
     /// <returns>A read-only list of permissions associated with the user. The list is empty if the user has no permissions.</returns>
     public async Task<IReadOnlyList<Permission>> GetUserPermissionsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        return await _context.Set<User>()
-            .Where(u => u.Id == userId)
-            .SelectMany(u => u.UserRoles)
-            .SelectMany(ur => ur.Role.RolePermissions)
-            .Select(rp => rp.Permission)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+        // Use direct join query to avoid navigation property issues
+        var permissions = await (
+            from user in _context.Set<User>()
+            join userRole in _context.Set<UserRole>() on user.Id equals userRole.UserId
+            join role in _context.Set<Role>() on userRole.RoleId equals role.Id
+            join rolePermission in _context.Set<RolePermission>() on role.Id equals rolePermission.RoleId
+            join permission in _context.Set<Permission>() on rolePermission.PermissionId equals permission.Id
+            where user.Id == userId
+            select permission
+        ).Distinct().ToListAsync(cancellationToken);
+
+        return permissions;
     }
 
     /// <summary>

@@ -11,11 +11,9 @@ namespace VolcanionAuth.Application.Features.RoleManagement.Commands.ToggleRoleS
 /// the changes. The updated role is returned as a data transfer object. If the role does not exist, a failure result is
 /// returned.</remarks>
 /// <param name="roleRepository">The repository used to update role entities in the data store.</param>
-/// <param name="readRoleRepository">The repository used to retrieve role entities along with their permissions.</param>
 /// <param name="unitOfWork">The unit of work used to commit changes to the data store.</param>
 public class ToggleRoleStatusCommandHandler(
     IRepository<Role> roleRepository,
-    IReadRepository<Role> readRoleRepository,
     IUnitOfWork unitOfWork) : IRequestHandler<ToggleRoleStatusCommand, Result<RoleDto>>
 {
     /// <summary>
@@ -28,8 +26,8 @@ public class ToggleRoleStatusCommandHandler(
     /// with an error message.</returns>
     public async Task<Result<RoleDto>> Handle(ToggleRoleStatusCommand request, CancellationToken cancellationToken)
     {
-        // Find the role with permissions
-        var role = await readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
+        // Find the role with permissions from WRITE repository
+        var role = await roleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
         if (role == null)
         {
             return Result.Failure<RoleDto>($"Role with ID '{request.RoleId}' was not found");
@@ -45,8 +43,7 @@ public class ToggleRoleStatusCommandHandler(
             role.Deactivate();
         }
 
-        // Save changes
-        roleRepository.Update(role);
+        // NO need to call Update - entity is already tracked
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Map to DTO

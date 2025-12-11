@@ -23,7 +23,37 @@ public interface IRepository<T> where T : class
     /// <returns>A task that represents the asynchronous operation. The task result contains the entity of type T if found;
     /// otherwise, null.</returns>
     Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Asynchronously retrieves a role and its associated permissions by the specified role identifier.
+    /// </summary>
+    /// <param name="roleId">The unique identifier of the role to retrieve.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the role with its permissions if
+    /// found; otherwise, null.</returns>
     Task<Role?> GetRoleWithPermissionsAsync(Guid roleId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Asynchronously retrieves a role by its unique identifier, including the users assigned to that role.
+    /// </summary>
+    /// <param name="roleId">The unique identifier of the role to retrieve.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the role with its associated users
+    /// if found; otherwise, null.</returns>
+    Task<Role?> GetRoleWithUsersAsync(Guid roleId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Asynchronously retrieves a permission by its unique identifier, including its associated roles.
+    /// </summary>
+    /// <param name="permissionId">The unique identifier of the permission to retrieve.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the permission with its associated
+    /// roles if found; otherwise, null.</returns>
+    Task<Permission?> GetPermissionWithRolesAsync(Guid permissionId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Asynchronously retrieves a user and their associated roles by user identifier.
+    /// </summary>
+    /// <param name="userId">The unique identifier of the user to retrieve.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the user and their roles if found;
+    /// otherwise, null.</returns>
     Task<User?> GetUserWithRolesAsync(Guid userId, CancellationToken cancellationToken = default);
     /// <summary>
     /// Asynchronously retrieves all entities of type T from the data source.
