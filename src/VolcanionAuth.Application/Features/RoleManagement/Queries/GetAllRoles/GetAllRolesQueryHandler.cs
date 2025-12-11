@@ -5,10 +5,26 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.RoleManagement.Queries.GetAllRoles;
 
 /// <summary>
-/// Handler for retrieving a paginated list of all roles.
+/// Handles queries to retrieve a paginated list of roles, including their associated permissions, based on filtering
+/// and search criteria.
 /// </summary>
+/// <remarks>This handler supports filtering roles by active status and searching by name or description.
+/// Pagination parameters must be within valid ranges; otherwise, the query will fail. The returned result includes both
+/// the paginated role data and metadata about the total count and pages.</remarks>
+/// <param name="roleRepository">The repository used to access role data, including roles and their permissions.</param>
 public class GetAllRolesQueryHandler(IReadRepository<Role> roleRepository) : IRequestHandler<GetAllRolesQuery, Result<PaginatedRoleResponse>>
 {
+    /// <summary>
+    /// Retrieves a paginated list of roles, including their associated permissions, based on the specified query
+    /// parameters.
+    /// </summary>
+    /// <remarks>The method supports filtering roles by active status and by a search term applied to role
+    /// names and descriptions. The page number must be greater than 0, and the page size must be between 1 and
+    /// 100.</remarks>
+    /// <param name="request">The query parameters that define pagination, filtering, and whether to include inactive roles.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing a paginated response of roles and their permissions. Returns a failure result if the
+    /// pagination parameters are invalid.</returns>
     public async Task<Result<PaginatedRoleResponse>> Handle(GetAllRolesQuery request, CancellationToken cancellationToken)
     {
         // Validate pagination parameters

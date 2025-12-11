@@ -33,13 +33,18 @@ namespace VolcanionAuth.API.Controllers.V1;
 public class UserManagementController(IMediator mediator, ILogger<UserManagementController> logger) : ControllerBase
 {
     /// <summary>
-    /// Retrieves a paginated list of all users in the system.
+    /// Retrieves a paginated list of users, optionally including inactive users and filtering by a search term.
     /// </summary>
-    /// <param name="page">Page number (default: 1)</param>
-    /// <param name="pageSize">Number of items per page (default: 10, max: 100)</param>
-    /// <param name="includeInactive">Whether to include inactive users (default: false)</param>
-    /// <param name="searchTerm">Optional search term to filter users by name or email</param>
-    /// <returns>A paginated list of users with their roles</returns>
+    /// <remarks>Requires the 'users:read' permission. Returns HTTP 200 (OK) with the user list, HTTP 400 (Bad
+    /// Request) if the query parameters are invalid, or HTTP 403 (Forbidden) if the caller lacks permission.</remarks>
+    /// <param name="page">The page number of results to retrieve. Must be greater than or equal to 1.</param>
+    /// <param name="pageSize">The maximum number of users to include in a single page of results. Must be greater than 0.</param>
+    /// <param name="includeInactive">Specifies whether to include inactive users in the results. Set to <see langword="true"/> to include inactive
+    /// users; otherwise, only active users are returned.</param>
+    /// <param name="searchTerm">An optional search term used to filter users by name, email, or other identifying information. If <see
+    /// langword="null"/>, no filtering is applied.</param>
+    /// <returns>An <see cref="IActionResult"/> containing a paginated list of users if the request is successful; otherwise, a
+    /// bad request or forbidden response.</returns>
     [HttpGet]
     [RequirePermission("users:read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -51,25 +56,31 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
         [FromQuery] bool includeInactive = true,
         [FromQuery] string? searchTerm = null)
     {
-        logger.LogDebug("Getting all users - Page: {Page}, PageSize: {PageSize}, IncludeInactive: {IncludeInactive}, SearchTerm: {SearchTerm}",
-            page, pageSize, includeInactive, searchTerm);
-
+        // Log the request details
+        logger.LogDebug("Getting all users - Page: {Page}, PageSize: {PageSize}, IncludeInactive: {IncludeInactive}, SearchTerm: {SearchTerm}", page, pageSize, includeInactive, searchTerm);
+        // Prepare the query for retrieving users
         var query = new GetAllUsersQuery(page, pageSize, includeInactive, searchTerm);
-        var result = await mediator.Send(query);
 
+        // Send the query via the mediator
+        var result = await mediator.Send(query);
         if (result.IsFailure)
         {
+            // Return a bad request response if the query fails
             return BadRequest(new { error = result.Error });
         }
-
+        // Return the list of users
         return Ok(result.Value);
     }
 
     /// <summary>
-    /// Retrieves detailed information about a specific user by their ID.
+    /// Retrieves the details of a user specified by their unique identifier.
     /// </summary>
-    /// <param name="id">The unique identifier of the user</param>
-    /// <returns>Detailed user information including roles</returns>
+    /// <remarks>Returns a 200 OK response with the user details if the user exists and the caller has
+    /// permission. Returns a 404 Not Found response if the user does not exist, or a 403 Forbidden response if the
+    /// caller lacks the required permission.</remarks>
+    /// <param name="id">The unique identifier of the user to retrieve.</param>
+    /// <returns>An <see cref="IActionResult"/> containing the user details if found; otherwise, a response indicating that the
+    /// user was not found or access is forbidden.</returns>
     [HttpGet("{id}")]
     [RequirePermission("users:read")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -77,24 +88,31 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUserById(Guid id)
     {
+        // Log the request
         logger.LogDebug("Getting user by ID: {UserId}", id);
-
+        // Prepare the query to get the user by ID
         var query = new GetUserByIdQuery(id);
-        var result = await mediator.Send(query);
 
+        // Send the query via the mediator
+        var result = await mediator.Send(query);
         if (result.IsFailure)
         {
+            // Return a not found response if the user does not exist
             return NotFound(new { error = result.Error });
         }
-
+        // Return the user details
         return Ok(result.Value);
     }
 
     /// <summary>
-    /// Creates a new user in the system.
+    /// Creates a new user account using the specified registration details.
     /// </summary>
-    /// <param name="command">The command containing the user details to create</param>
-    /// <returns>The created user's information</returns>
+    /// <remarks>This action requires the 'users:write' permission. If a user with the specified email already
+    /// exists, a 409 Conflict response is returned. Validation errors result in a 400 Bad Request response.</remarks>
+    /// <param name="command">The command containing the user's registration information, such as email and password. Cannot be null.</param>
+    /// <returns>A result indicating the outcome of the operation. Returns a 201 Created response with the new user's details if
+    /// successful; otherwise, returns a 400 Bad Request, 403 Forbidden, or 409 Conflict response depending on the error
+    /// condition.</returns>
     [HttpPost]
     [RequirePermission("users:write")]
     [ProducesResponseType(StatusCodes.Status201Created)]
@@ -103,28 +121,37 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserCommand command)
     {
+        // Log the request details
         logger.LogDebug("Creating user with email: {Email}", command.Email);
 
+        // Send the command via the mediator
         var result = await mediator.Send(command);
-
         if (result.IsFailure)
         {
+            // Handle specific error cases
             if (result.Error.Contains("email already exists", StringComparison.OrdinalIgnoreCase))
             {
                 return Conflict(new { error = result.Error });
             }
+            // Return a bad request response for other errors
             return BadRequest(new { error = result.Error });
         }
-
+        // Return a created response with the new user's details
         return CreatedAtAction(nameof(GetUserById), new { id = result.Value.UserId }, result.Value);
     }
 
     /// <summary>
-    /// Updates an existing user's information.
+    /// Updates the details of an existing user with the specified identifier.
     /// </summary>
-    /// <param name="id">The unique identifier of the user to update</param>
-    /// <param name="command">The command containing the updated user information</param>
-    /// <returns>The updated user's information</returns>
+    /// <remarks>Requires the "users:write" permission. Returns HTTP 200 (OK) on success, 400 (Bad Request)
+    /// for validation errors or mismatched IDs, 404 (Not Found) if the user does not exist, and 403 (Forbidden) if the
+    /// caller is not authorized.</remarks>
+    /// <param name="id">The unique identifier of the user to update. Must match the user ID in the command.</param>
+    /// <param name="command">An object containing the updated user information. The user ID in the command must match the route parameter.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating the result of the update operation. Returns <see
+    /// cref="OkObjectResult"/> with the updated user on success, <see cref="BadRequestObjectResult"/> if the request is
+    /// invalid, <see cref="NotFoundObjectResult"/> if the user does not exist, or <see cref="ForbidResult"/> if the
+    /// caller lacks permission.</returns>
     [HttpPut("{id}")]
     [RequirePermission("users:write")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -133,33 +160,38 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UpdateUserCommand command)
     {
+        // Log the request details
         logger.LogDebug("Updating user: {UserId}", id);
-
-        // Ensure the ID in the route matches the ID in the command
+        // Validate that the route ID matches the command's user ID
         if (id != command.UserId)
         {
             return BadRequest(new { error = "User ID in route does not match command" });
         }
 
+        // Send the command via the mediator
         var result = await mediator.Send(command);
-
         if (result.IsFailure)
         {
+            // Handle specific error cases
             if (result.Error.Contains("not found", StringComparison.OrdinalIgnoreCase))
             {
                 return NotFound(new { error = result.Error });
             }
+            // Return a bad request response for other errors
             return BadRequest(new { error = result.Error });
         }
-
+        // Return the updated user details
         return Ok(result.Value);
     }
 
     /// <summary>
-    /// Permanently deletes a user from the system.
+    /// Deletes the user with the specified unique identifier.
     /// </summary>
-    /// <param name="id">The unique identifier of the user to delete</param>
-    /// <returns>Success status</returns>
+    /// <remarks>Requires the "users:delete" permission. Returns HTTP 204 if successful, 404 if the user is
+    /// not found, or 403 if access is forbidden.</remarks>
+    /// <param name="id">The unique identifier of the user to delete.</param>
+    /// <returns>A <see cref="NoContentResult"/> if the user was successfully deleted; a <see cref="NotFoundObjectResult"/> if
+    /// the user does not exist; or a <see cref="ForbidResult"/> if the caller lacks sufficient permissions.</returns>
     [HttpDelete("{id}")]
     [RequirePermission("users:delete")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -167,25 +199,32 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteUser(Guid id)
     {
+        // Log the request details
         logger.LogDebug("Deleting user: {UserId}", id);
-
+        // Prepare the command to delete the user
         var command = new DeleteUserCommand(id);
-        var result = await mediator.Send(command);
 
+        // Send the command via the mediator
+        var result = await mediator.Send(command);
         if (result.IsFailure)
         {
+            // Return a not found response if the user does not exist
             return NotFound(new { error = result.Error });
         }
-
+        // Return a no content response on successful deletion
         return NoContent();
     }
 
     /// <summary>
-    /// Activates or deactivates a user account.
+    /// Toggles the active status of the specified user account.
     /// </summary>
-    /// <param name="id">The unique identifier of the user</param>
-    /// <param name="request">Request containing the desired active status</param>
-    /// <returns>The updated user status</returns>
+    /// <remarks>Requires the 'users:manage' permission. This endpoint is typically used by administrators to
+    /// enable or disable user accounts.</remarks>
+    /// <param name="id">The unique identifier of the user whose status is to be toggled.</param>
+    /// <param name="request">An object containing the desired active status for the user. Must not be null.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating the result of the operation. Returns 200 OK with the updated user
+    /// status if successful; 404 Not Found if the user does not exist; or 403 Forbidden if the caller lacks sufficient
+    /// permissions.</returns>
     [HttpPatch("{id}/toggle-status")]
     [RequirePermission("users:manage")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -193,22 +232,26 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> ToggleUserStatus(Guid id, [FromBody] ToggleUserStatusRequest request)
     {
+        // Log the request details
         logger.LogDebug("Toggling user status: {UserId}, IsActive: {IsActive}", id, request.IsActive);
-
+        // Prepare the command to toggle the user's status
         var command = new ToggleUserStatusCommand(id, request.IsActive);
-        var result = await mediator.Send(command);
 
+        // Send the command via the mediator
+        var result = await mediator.Send(command);
         if (result.IsFailure)
         {
+            // Return a not found response if the user does not exist
             return NotFound(new { error = result.Error });
         }
-
+        // Return the updated user status
         return Ok(result.Value);
     }
 }
 
 /// <summary>
-/// Request model for toggling user status.
+/// Represents a request to change a user's active status.
 /// </summary>
-/// <param name="IsActive">True to activate, false to deactivate</param>
+/// <param name="IsActive">A value indicating whether the user should be set as active. Specify <see langword="true"/> to activate the user;
+/// otherwise, <see langword="false"/> to deactivate.</param>
 public record ToggleUserStatusRequest(bool IsActive);

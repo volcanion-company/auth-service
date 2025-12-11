@@ -5,28 +5,31 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.RoleManagement.Commands.ToggleRoleStatus;
 
 /// <summary>
-/// Handler for activating or deactivating a role.
+/// Handles the command to toggle the active status of a role and persists the change.
 /// </summary>
-public class ToggleRoleStatusCommandHandler : IRequestHandler<ToggleRoleStatusCommand, Result<RoleDto>>
+/// <remarks>This handler retrieves the specified role, toggles its active status based on the command, and saves
+/// the changes. The updated role is returned as a data transfer object. If the role does not exist, a failure result is
+/// returned.</remarks>
+/// <param name="roleRepository">The repository used to update role entities in the data store.</param>
+/// <param name="readRoleRepository">The repository used to retrieve role entities along with their permissions.</param>
+/// <param name="unitOfWork">The unit of work used to commit changes to the data store.</param>
+public class ToggleRoleStatusCommandHandler(
+    IRepository<Role> roleRepository,
+    IReadRepository<Role> readRoleRepository,
+    IUnitOfWork unitOfWork) : IRequestHandler<ToggleRoleStatusCommand, Result<RoleDto>>
 {
-    private readonly IRepository<Role> _roleRepository;
-    private readonly IReadRepository<Role> _readRoleRepository;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public ToggleRoleStatusCommandHandler(
-        IRepository<Role> roleRepository,
-        IReadRepository<Role> readRoleRepository,
-        IUnitOfWork unitOfWork)
-    {
-        _roleRepository = roleRepository;
-        _readRoleRepository = readRoleRepository;
-        _unitOfWork = unitOfWork;
-    }
-
+    /// <summary>
+    /// Toggles the active status of a role and returns the updated role information.
+    /// </summary>
+    /// <remarks>Returns a failure result if the specified role does not exist.</remarks>
+    /// <param name="request">The command containing the role identifier and the desired active status.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing the updated role data transfer object if the operation succeeds; otherwise, a failure result
+    /// with an error message.</returns>
     public async Task<Result<RoleDto>> Handle(ToggleRoleStatusCommand request, CancellationToken cancellationToken)
     {
         // Find the role with permissions
-        var role = await _readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
+        var role = await readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
         if (role == null)
         {
             return Result.Failure<RoleDto>($"Role with ID '{request.RoleId}' was not found");
@@ -43,8 +46,8 @@ public class ToggleRoleStatusCommandHandler : IRequestHandler<ToggleRoleStatusCo
         }
 
         // Save changes
-        _roleRepository.Update(role);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        roleRepository.Update(role);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Map to DTO
         var roleDto = new RoleDto(
@@ -54,12 +57,12 @@ public class ToggleRoleStatusCommandHandler : IRequestHandler<ToggleRoleStatusCo
             role.IsActive,
             role.CreatedAt,
             role.UpdatedAt,
-            role.RolePermissions.Select(rp => new RolePermissionDto(
+            [.. role.RolePermissions.Select(rp => new RolePermissionDto(
                 rp.PermissionId,
                 rp.Permission.Resource,
                 rp.Permission.Action,
                 rp.Permission.GetPermissionString()
-            )).ToList()
+            ))]
         );
 
         return Result.Success(roleDto);

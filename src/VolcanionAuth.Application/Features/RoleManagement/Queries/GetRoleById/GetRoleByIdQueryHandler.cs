@@ -5,21 +5,29 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.RoleManagement.Queries.GetRoleById;
 
 /// <summary>
-/// Handler for retrieving detailed information about a specific role.
+/// Handles queries to retrieve a role by its unique identifier, including its associated permissions.
 /// </summary>
-public class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, Result<RoleDto>>
+/// <remarks>This handler maps the retrieved role entity to a data transfer object (DTO) containing role details
+/// and permissions. If the specified role does not exist, the result will indicate failure. This handler is typically
+/// used in scenarios where role information, including permissions, is required for authorization or management
+/// purposes.</remarks>
+/// <param name="roleRepository">The repository used to access role data and permissions from the data store.</param>
+public class GetRoleByIdQueryHandler(IReadRepository<Role> roleRepository) : IRequestHandler<GetRoleByIdQuery, Result<RoleDto>>
 {
-    private readonly IReadRepository<Role> _roleRepository;
-
-    public GetRoleByIdQueryHandler(IReadRepository<Role> roleRepository)
-    {
-        _roleRepository = roleRepository;
-    }
-
+    /// <summary>
+    /// Handles the retrieval of a role and its associated permissions by role identifier.
+    /// </summary>
+    /// <remarks>The returned <see cref="RoleDto"/> includes all permissions assigned to the role. If the
+    /// specified role does not exist, the result will indicate failure and contain an appropriate error
+    /// message.</remarks>
+    /// <param name="request">The query containing the role identifier to retrieve. Cannot be null.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing the role and its permissions as a <see cref="RoleDto"/> if found; otherwise, a failure
+    /// result indicating that the role was not found.</returns>
     public async Task<Result<RoleDto>> Handle(GetRoleByIdQuery request, CancellationToken cancellationToken)
     {
         // Find the role by ID with permissions
-        var role = await _roleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
+        var role = await roleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
 
         if (role == null)
         {
@@ -34,12 +42,12 @@ public class GetRoleByIdQueryHandler : IRequestHandler<GetRoleByIdQuery, Result<
             role.IsActive,
             role.CreatedAt,
             role.UpdatedAt,
-            role.RolePermissions.Select(rp => new RolePermissionDto(
+            [.. role.RolePermissions.Select(rp => new RolePermissionDto(
                 rp.PermissionId,
                 rp.Permission.Resource,
                 rp.Permission.Action,
                 rp.Permission.GetPermissionString()
-            )).ToList()
+            ))]
         );
 
         return Result.Success(roleDto);

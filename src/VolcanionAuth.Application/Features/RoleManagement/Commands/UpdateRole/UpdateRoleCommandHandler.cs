@@ -5,31 +5,36 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.RoleManagement.Commands.UpdateRole;
 
 /// <summary>
-/// Handler for updating an existing role's information.
+/// Handles the update operation for an existing role, including its name, description, and associated permissions.
 /// </summary>
-public class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Result<RoleDto>>
+/// <remarks>This handler validates the existence of the role and permissions before applying updates. It ensures
+/// that role names remain unique and that only valid permission IDs are assigned. All changes are committed atomically
+/// using the provided unit of work.</remarks>
+/// <param name="roleRepository">The repository used to persist changes to role entities.</param>
+/// <param name="readRoleRepository">The repository used to retrieve role entities for validation and data loading.</param>
+/// <param name="permissionRepository">The repository used to access permission entities when updating role permissions.</param>
+/// <param name="unitOfWork">The unit of work used to commit changes to the data store as part of the update operation.</param>
+public class UpdateRoleCommandHandler(
+    IRepository<Role> roleRepository,
+    IReadRepository<Role> readRoleRepository,
+    IReadRepository<Permission> permissionRepository,
+    IUnitOfWork unitOfWork) : IRequestHandler<UpdateRoleCommand, Result<RoleDto>>
 {
-    private readonly IRepository<Role> _roleRepository;
-    private readonly IReadRepository<Role> _readRoleRepository;
-    private readonly IReadRepository<Permission> _permissionRepository;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public UpdateRoleCommandHandler(
-        IRepository<Role> roleRepository,
-        IReadRepository<Role> readRoleRepository,
-        IReadRepository<Permission> permissionRepository,
-        IUnitOfWork unitOfWork)
-    {
-        _roleRepository = roleRepository;
-        _readRoleRepository = readRoleRepository;
-        _permissionRepository = permissionRepository;
-        _unitOfWork = unitOfWork;
-    }
-
+    /// <summary>
+    /// Handles the update of an existing role, including its name, description, and permissions, based on the provided
+    /// command.
+    /// </summary>
+    /// <remarks>If the specified role does not exist, or if any provided permission ID is invalid, the
+    /// operation fails and returns an appropriate error message. The method ensures that role names remain unique and
+    /// that all permission IDs are valid before applying changes.</remarks>
+    /// <param name="request">The command containing the role ID to update, along with the new name, description, and permission IDs to apply.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A result containing the updated role data transfer object if the update succeeds; otherwise, a failure result
+    /// with an error message describing why the update could not be completed.</returns>
     public async Task<Result<RoleDto>> Handle(UpdateRoleCommand request, CancellationToken cancellationToken)
     {
         // Find the role
-        var role = await _readRoleRepository.GetByIdAsync(request.RoleId, cancellationToken);
+        var role = await readRoleRepository.GetByIdAsync(request.RoleId, cancellationToken);
         if (role == null)
         {
             return Result.Failure<RoleDto>($"Role with ID '{request.RoleId}' was not found");
@@ -39,7 +44,7 @@ public class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Resul
         if (!string.IsNullOrWhiteSpace(request.Name) && request.Name != role.Name)
         {
             // Check if new name already exists
-            var allRoles = await _readRoleRepository.GetAllAsync(cancellationToken);
+            var allRoles = await readRoleRepository.GetAllAsync(cancellationToken);
             if (allRoles.Any(r => r.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase) && r.Id != request.RoleId))
             {
                 return Result.Failure<RoleDto>($"A role with the name '{request.Name}' already exists");
@@ -63,7 +68,7 @@ public class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Resul
         // Update permissions if provided
         if (request.PermissionIds != null)
         {
-            var allPermissions = await _permissionRepository.GetAllAsync(cancellationToken);
+            var allPermissions = await permissionRepository.GetAllAsync(cancellationToken);
             var requestedPermissions = allPermissions.Where(p => request.PermissionIds.Contains(p.Id)).ToList();
 
             if (requestedPermissions.Count != request.PermissionIds.Count)
@@ -88,11 +93,11 @@ public class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Resul
         }
 
         // Save changes
-        _roleRepository.Update(role);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        roleRepository.Update(role);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Reload role with permissions
-        var updatedRole = await _readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
+        var updatedRole = await readRoleRepository.GetRoleWithPermissionsAsync(request.RoleId, cancellationToken);
 
         // Map to DTO
         var roleDto = new RoleDto(
@@ -102,12 +107,12 @@ public class UpdateRoleCommandHandler : IRequestHandler<UpdateRoleCommand, Resul
             updatedRole.IsActive,
             updatedRole.CreatedAt,
             updatedRole.UpdatedAt,
-            updatedRole.RolePermissions.Select(rp => new RolePermissionDto(
+            [.. updatedRole.RolePermissions.Select(rp => new RolePermissionDto(
                 rp.PermissionId,
                 rp.Permission.Resource,
                 rp.Permission.Action,
                 rp.Permission.GetPermissionString()
-            )).ToList()
+            ))]
         );
 
         return Result.Success(roleDto);

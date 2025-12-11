@@ -1,23 +1,31 @@
-using MediatR;
 using VolcanionAuth.Application.Common.Interfaces;
 using VolcanionAuth.Application.Features.UserManagement.Common;
-using VolcanionAuth.Domain.Common;
 using VolcanionAuth.Domain.Entities;
 
 namespace VolcanionAuth.Application.Features.UserManagement.Queries.GetAllUsers;
 
 /// <summary>
-/// Handler for retrieving a paginated list of users with filtering and search capabilities.
+/// Handles queries to retrieve a paginated list of users, including their roles and permissions, based on specified
+/// filtering and search criteria.
 /// </summary>
-public class GetAllUsersQueryHandler : IRequestHandler<GetAllUsersQuery, Result<UserListDto>>
+/// <remarks>This handler supports filtering users by active status and searching by email or name. Pagination
+/// parameters must be within valid ranges to ensure correct results. The returned user list includes detailed role and
+/// permission information for each user.</remarks>
+/// <param name="userRepository">The user data repository used to access and retrieve user information, including roles and permissions.</param>
+public class GetAllUsersQueryHandler(IReadRepository<User> userRepository) : IRequestHandler<GetAllUsersQuery, Result<UserListDto>>
 {
-    private readonly IReadRepository<User> _userRepository;
-
-    public GetAllUsersQueryHandler(IReadRepository<User> userRepository)
-    {
-        _userRepository = userRepository;
-    }
-
+    /// <summary>
+    /// Handles a request to retrieve a paginated list of users, applying optional filters for activity status and
+    /// search terms.
+    /// </summary>
+    /// <remarks>The returned user list includes user roles and permissions. If no users match the filters,
+    /// the list will be empty. The method enforces limits on pagination parameters to prevent invalid
+    /// requests.</remarks>
+    /// <param name="request">The query containing pagination parameters, filter options, and search criteria for retrieving users. The page
+    /// number must be greater than 0, and the page size must be between 1 and 100.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the asynchronous operation.</param>
+    /// <returns>A result containing a UserListDto with the filtered and paginated list of users. Returns a failure result if the
+    /// page number or page size is outside the allowed range.</returns>
     public async Task<Result<UserListDto>> Handle(GetAllUsersQuery request, CancellationToken cancellationToken)
     {
         // Validate page and page size
@@ -32,7 +40,7 @@ public class GetAllUsersQueryHandler : IRequestHandler<GetAllUsersQuery, Result<
         }
 
         // Get all users with their roles
-        var allUsers = await _userRepository.GetAllUsersWithPermissionsAsync(cancellationToken);
+        var allUsers = await userRepository.GetAllUsersWithPermissionsAsync(cancellationToken);
 
         // Apply filters
         var filteredUsers = allUsers.AsQueryable();
@@ -48,9 +56,9 @@ public class GetAllUsersQueryHandler : IRequestHandler<GetAllUsersQuery, Result<
         {
             var searchLower = request.SearchTerm.ToLower();
             filteredUsers = filteredUsers.Where(u =>
-                u.Email.Value.ToLower().Contains(searchLower) ||
-                u.FullName.FirstName.ToLower().Contains(searchLower) ||
-                u.FullName.LastName.ToLower().Contains(searchLower)
+                u.Email.Value.Contains(searchLower, StringComparison.CurrentCultureIgnoreCase) ||
+                u.FullName.FirstName.Contains(searchLower, StringComparison.CurrentCultureIgnoreCase) ||
+                u.FullName.LastName.Contains(searchLower, StringComparison.CurrentCultureIgnoreCase)
             );
         }
 

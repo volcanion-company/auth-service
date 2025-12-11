@@ -3,6 +3,7 @@ using VolcanionAuth.Application.Features.PermissionManagement.Common;
 namespace VolcanionAuth.Application.Features.PermissionManagement.Queries.GetPermissionById;
 
 /// <summary>
-/// Query to retrieve detailed information about a specific permission.
+/// Represents a query to retrieve a permission by its unique identifier.
 /// </summary>
+/// <param name="PermissionId">The unique identifier of the permission to retrieve.</param>
 public record GetPermissionByIdQuery(Guid PermissionId) : IRequest<Result<PermissionDto>>;

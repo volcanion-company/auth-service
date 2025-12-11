@@ -1,16 +1,17 @@
-using MediatR;
 using VolcanionAuth.Application.Features.UserManagement.Common;
-using VolcanionAuth.Domain.Common;
 
 namespace VolcanionAuth.Application.Features.UserManagement.Queries.GetAllUsers;
 
 /// <summary>
-/// Query to retrieve a paginated list of all users in the system.
+/// Represents a query to retrieve a paginated list of users, optionally including inactive users and filtering by a
+/// search term.
 /// </summary>
-/// <param name="Page">Page number (default: 1)</param>
-/// <param name="PageSize">Number of items per page (default: 10)</param>
-/// <param name="IncludeInactive">Whether to include inactive users (default: false)</param>
-/// <param name="SearchTerm">Optional search term to filter users by name or email</param>
+/// <param name="Page">The page number of results to retrieve. Must be greater than or equal to 1.</param>
+/// <param name="PageSize">The maximum number of users to include in a single page of results. Must be greater than 0.</param>
+/// <param name="IncludeInactive">Indicates whether inactive users should be included in the results. Set to <see langword="true"/> to include
+/// inactive users; otherwise, only active users are returned.</param>
+/// <param name="SearchTerm">An optional search term used to filter users by name or other identifying information. If <see langword="null"/>, no
+/// filtering is applied.</param>
 public record GetAllUsersQuery(
     int Page = 1,
     int PageSize = 10,

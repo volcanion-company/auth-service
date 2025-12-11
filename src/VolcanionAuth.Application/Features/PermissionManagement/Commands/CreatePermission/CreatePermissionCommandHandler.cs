@@ -5,28 +5,33 @@ using VolcanionAuth.Domain.Entities;
 namespace VolcanionAuth.Application.Features.PermissionManagement.Commands.CreatePermission;
 
 /// <summary>
-/// Handler for creating a new permission.
+/// Handles the creation of a new permission by processing a CreatePermissionCommand request.
 /// </summary>
-public class CreatePermissionCommandHandler : IRequestHandler<CreatePermissionCommand, Result<PermissionDto>>
+/// <remarks>This handler ensures that duplicate permissions are not created by validating the resource and action
+/// combination before adding a new permission. The operation is performed asynchronously and changes are committed
+/// using the provided unit of work.</remarks>
+/// <param name="permissionRepository">The repository used to add new Permission entities to the data store.</param>
+/// <param name="readPermissionRepository">The repository used to query existing Permission entities for validation purposes.</param>
+/// <param name="unitOfWork">The unit of work used to persist changes to the underlying data store.</param>
+public class CreatePermissionCommandHandler(
+    IRepository<Permission> permissionRepository,
+    IReadRepository<Permission> readPermissionRepository,
+    IUnitOfWork unitOfWork) : IRequestHandler<CreatePermissionCommand, Result<PermissionDto>>
 {
-    private readonly IRepository<Permission> _permissionRepository;
-    private readonly IReadRepository<Permission> _readPermissionRepository;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public CreatePermissionCommandHandler(
-        IRepository<Permission> permissionRepository,
-        IReadRepository<Permission> readPermissionRepository,
-        IUnitOfWork unitOfWork)
-    {
-        _permissionRepository = permissionRepository;
-        _readPermissionRepository = readPermissionRepository;
-        _unitOfWork = unitOfWork;
-    }
-
+    /// <summary>
+    /// Handles the creation of a new permission based on the specified command request.
+    /// </summary>
+    /// <remarks>If a permission with the same resource and action already exists, the operation fails and
+    /// returns an error. The created permission will not have any roles assigned initially.</remarks>
+    /// <param name="request">The command containing the details of the permission to create, including resource, action, and description.
+    /// Cannot be null.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A result containing the created permission as a PermissionDto if successful; otherwise, a failure result with an
+    /// error message.</returns>
     public async Task<Result<PermissionDto>> Handle(CreatePermissionCommand request, CancellationToken cancellationToken)
     {
         // Check if permission already exists
-        var allPermissions = await _readPermissionRepository.GetAllAsync(cancellationToken);
+        var allPermissions = await readPermissionRepository.GetAllAsync(cancellationToken);
         if (allPermissions.Any(p => 
             p.Resource.Equals(request.Resource, StringComparison.OrdinalIgnoreCase) && 
             p.Action.Equals(request.Action, StringComparison.OrdinalIgnoreCase)))
@@ -44,8 +49,8 @@ public class CreatePermissionCommandHandler : IRequestHandler<CreatePermissionCo
         var permission = permissionResult.Value;
 
         // Save the permission
-        await _permissionRepository.AddAsync(permission, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await permissionRepository.AddAsync(permission, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Map to DTO
         var permissionDto = new PermissionDto(
