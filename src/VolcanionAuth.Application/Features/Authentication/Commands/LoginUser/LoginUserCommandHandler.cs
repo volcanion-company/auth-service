@@ -1,74 +1,92 @@
-using MediatR;
 using VolcanionAuth.Application.Common.Interfaces;
-using VolcanionAuth.Domain.Common;
 using VolcanionAuth.Domain.Entities;
 
 namespace VolcanionAuth.Application.Features.Authentication.Commands.LoginUser;
 
-public class LoginUserCommandHandler : IRequestHandler<LoginUserCommand, Result<LoginUserResponse>>
+/// <summary>
+/// Handles user login requests by validating credentials, recording login attempts, generating authentication tokens,
+/// and caching the user session.
+/// </summary>
+/// <remarks>This handler coordinates multiple services to ensure secure authentication and session management. It
+/// records both successful and failed login attempts, and caches session data to optimize subsequent requests. Thread
+/// safety and transactional integrity are maintained through the use of the unit of work pattern.</remarks>
+/// <param name="userRepository">The user repository used to retrieve and update user entities, including roles and login history.</param>
+/// <param name="readRepository">The read-only repository for accessing user permissions and related data.</param>
+/// <param name="passwordHasher">The service used to verify user passwords against stored password hashes.</param>
+/// <param name="jwtTokenService">The service responsible for generating access and refresh JWT tokens for authenticated users.</param>
+/// <param name="unitOfWork">The unit of work used to persist changes to the data store as part of the login process.</param>
+/// <param name="cacheService">The cache service used to store user session information for improved performance and scalability.</param>
+public class LoginUserCommandHandler(
+    IUserRepository userRepository,
+    IReadRepository<User> readRepository,
+    IPasswordHasher passwordHasher,
+    IJwtTokenService jwtTokenService,
+    IUnitOfWork unitOfWork,
+    ICacheService cacheService) : IRequestHandler<LoginUserCommand, Result<LoginUserResponse>>
 {
-    private readonly IRepository<User> _userRepository;
-    private readonly IReadRepository<User> _readRepository;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenService _jwtTokenService;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly ICacheService _cacheService;
-
-    public LoginUserCommandHandler(
-        IRepository<User> userRepository,
-        IReadRepository<User> readRepository,
-        IPasswordHasher passwordHasher,
-        IJwtTokenService jwtTokenService,
-        IUnitOfWork unitOfWork,
-        ICacheService cacheService)
-    {
-        _userRepository = userRepository;
-        _readRepository = readRepository;
-        _passwordHasher = passwordHasher;
-        _jwtTokenService = jwtTokenService;
-        _unitOfWork = unitOfWork;
-        _cacheService = cacheService;
-    }
-
+    /// <summary>
+    /// Authenticates a user based on the provided login credentials and returns a result containing authentication
+    /// tokens and user information.
+    /// </summary>
+    /// <remarks>This method normalizes the email for case-insensitive comparison and records both successful
+    /// and failed login attempts. If authentication is successful, user session data is cached for 30 minutes. The
+    /// returned tokens are valid for 7 days. The method does not throw exceptions for invalid credentials; instead, it
+    /// returns a failure result.</remarks>
+    /// <param name="request">The login command containing the user's email, password, IP address, and user agent information used for
+    /// authentication.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the authentication operation.</param>
+    /// <returns>A result containing a <see cref="LoginUserResponse"/> with access and refresh tokens, token expiration, and user
+    /// details if authentication succeeds; otherwise, a failure result with an error message.</returns>
     public async Task<Result<LoginUserResponse>> Handle(LoginUserCommand request, CancellationToken cancellationToken)
     {
-        // Get user with roles and permissions
-        var user = await _readRepository.GetUserByEmailAsync(request.Email, cancellationToken);
+        // Normalize email for case-insensitive comparison
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        // Get user from write repository with roles (tracked entity)
+        var user = await userRepository.GetUserByEmailWithRolesAsync(normalizedEmail, cancellationToken);
         if (user == null)
         {
+            // Record failed login attempt for non-existing user
             return Result.Failure<LoginUserResponse>("Invalid credentials.");
         }
 
         // Verify password
-        if (!_passwordHasher.VerifyPassword(request.Password, user.Password.Hash))
+        if (!passwordHasher.VerifyPassword(request.Password, user.Password.Hash))
         {
+            // Record failed login
             user.RecordFailedLogin(request.IpAddress, request.UserAgent);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            // Save changes for failed login attempt
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            // Return generic error message
             return Result.Failure<LoginUserResponse>("Invalid credentials.");
         }
 
         // Record successful login
         var loginResult = user.RecordSuccessfulLogin(request.IpAddress, request.UserAgent);
         if (loginResult.IsFailure)
+        {
+            // Return failure if recording login failed
             return Result.Failure<LoginUserResponse>(loginResult.Error);
+        }
 
-        // Get user permissions
-        var permissions = await _readRepository.GetUserPermissionsAsync(user.Id, cancellationToken);
+        // Get user permissions from read repository
+        var permissions = await readRepository.GetUserPermissionsAsync(user.Id, cancellationToken);
+        
+        // Get roles from the tracked user entity (already loaded with Include)
         var roles = user.UserRoles.Select(ur => ur.RoleId.ToString()).ToList();
         var permissionStrings = permissions.Select(p => p.GetPermissionString()).ToList();
 
         // Generate tokens
-        var accessToken = _jwtTokenService.GenerateAccessToken(user, roles, permissionStrings);
-        var refreshToken = _jwtTokenService.GenerateRefreshToken();
+        var accessToken = jwtTokenService.GenerateAccessToken(user, roles, permissionStrings);
+        var refreshToken = jwtTokenService.GenerateRefreshToken();
         var expiresAt = DateTime.UtcNow.AddDays(7);
 
         // Create refresh token
         user.CreateRefreshToken(refreshToken, expiresAt);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Cache user session
-        await _cacheService.SetAsync($"user_session:{user.Id}", new
+        await cacheService.SetAsync($"user_session:{user.Id}", new
         {
             user.Id,
             user.Email,
