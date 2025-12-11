@@ -41,10 +41,10 @@ builder.Services.AddControllers(options =>
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JWT");
-var secretKey = jwtSettings["SecretKey"] ?? throw new ArgumentNullException("JWT:Secret");
-var issuer = jwtSettings["Issuer"] ?? throw new ArgumentNullException("JWT:Issuer");
-var audience = jwtSettings["Audience"] ?? throw new ArgumentNullException("JWT:Audience");
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"] ?? throw new ArgumentNullException("JwtSettings:Secret");
+var issuer = jwtSettings["Issuer"] ?? throw new ArgumentNullException("JwtSettings:Issuer");
+var audience = jwtSettings["Audience"] ?? throw new ArgumentNullException("JwtSettings:Audience");
 
 builder.Services.AddAuthentication(options =>
 {
