@@ -24,19 +24,19 @@ public class JwtTokenService(IConfiguration configuration) : IJwtTokenService
     /// <summary>
     /// Secret key used for signing JWTs.
     /// </summary>
-    private readonly string _secretKey = configuration["Jwt:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+    private readonly string _secretKey = configuration["JwtSettings:SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
     /// <summary>
     /// Issuer of the JWTs.
     /// </summary>
-    private readonly string _issuer = configuration["Jwt:Issuer"] ?? "VolcanionAuth";
+    private readonly string _issuer = configuration["JwtSettings:Issuer"] ?? "VolcanionAuth";
     /// <summary>
     /// Audience for the JWTs.
     /// </summary>
-    private readonly string _audience = configuration["Jwt:Audience"] ?? "VolcanionAuthAPI";
+    private readonly string _audience = configuration["JwtSettings:Audience"] ?? "VolcanionAuthAPI";
     /// <summary>
     /// Access token expiration time in minutes.
     /// </summary>
-    private readonly int _accessTokenExpirationMinutes = int.Parse(configuration["Jwt:AccessTokenExpirationMinutes"] ?? "30");
+    private readonly int _accessTokenExpirationMinutes = int.Parse(configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "30");
 
     /// <summary>
     /// Generates a JSON Web Token (JWT) access token for the specified user, including the provided roles and

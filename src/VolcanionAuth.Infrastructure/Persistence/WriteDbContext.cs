@@ -45,47 +45,10 @@ public class WriteDbContext(DbContextOptions<WriteDbContext> options) : DbContex
     /// written to the database.</returns>
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // Fix entity states BEFORE dispatching events
-        FixEntityStates();
-        
         // Dispatch domain events before saving
         await DispatchDomainEvents(cancellationToken);
         
         return await base.SaveChangesAsync(cancellationToken);
-    }
-
-    /// <summary>
-    /// Fixes entity states for child entities that should be Added but are incorrectly marked as Modified
-    /// </summary>
-    private void FixEntityStates()
-    {
-        var entries = ChangeTracker.Entries().ToList();
-        
-        foreach (var entry in entries)
-        {
-            // DEBUG: Log entity states
-            Console.WriteLine($"Entity: {entry.Entity.GetType().Name}, State: {entry.State}");
-            
-            if (entry.State == EntityState.Modified)
-            {
-                var modifiedProps = entry.Properties.Where(p => p.IsModified).Select(p => p.Metadata.Name);
-                Console.WriteLine($"  Modified properties: {string.Join(", ", modifiedProps)}");
-                
-                // For child entities (LoginHistory, RefreshToken), check if they're actually new
-                var entityType = entry.Metadata.ClrType.Name;
-                if (entityType == "LoginHistory" || entityType == "RefreshToken")
-                {
-                    // If all properties are marked as modified, it's a new entity
-                    var allPropsModified = entry.Properties.All(p => p.IsModified || p.Metadata.IsKey());
-                    
-                    if (allPropsModified)
-                    {
-                        Console.WriteLine($"  -> Changing state to Added (new child entity)");
-                        entry.State = EntityState.Added;
-                    }
-                }
-            }
-        }
     }
 
     /// <summary>

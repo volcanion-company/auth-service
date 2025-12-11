@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VolcanionAuth.API.Filters;
+using VolcanionAuth.Application.Features.UserManagement.Commands.AssignRoles;
 using VolcanionAuth.Application.Features.UserManagement.Commands.CreateUser;
 using VolcanionAuth.Application.Features.UserManagement.Commands.DeleteUser;
 using VolcanionAuth.Application.Features.UserManagement.Commands.ToggleUserStatus;
@@ -247,6 +248,46 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
         // Return the updated user status
         return Ok(result.Value);
     }
+
+    /// <summary>
+    /// Assigns a set of roles to a user, replacing all existing role assignments.
+    /// </summary>
+    /// <remarks>Requires the 'users:write' permission. This endpoint replaces all existing roles with the
+    /// provided set. Only active roles can be assigned. Returns HTTP 200 OK with the updated user details on success,
+    /// HTTP 400 Bad Request if any role IDs are invalid or roles are inactive, HTTP 404 Not Found if the user does not
+    /// exist, or HTTP 403 Forbidden if the caller lacks permission.</remarks>
+    /// <param name="userId">The unique identifier of the user to assign roles to.</param>
+    /// <param name="request">An object containing the list of role IDs to assign to the user.</param>
+    /// <returns>An <see cref="IActionResult"/> containing the updated user details if successful; otherwise, an error response.</returns>
+    [HttpPut("{userId}/assign-roles")]
+    [RequirePermission("users:write")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> AssignRoles(Guid userId, [FromBody] AssignRolesRequest request)
+    {
+        // Log the request details
+        logger.LogDebug("Assigning roles to user: {UserId}, Role count: {Count}", userId, request.RoleIds.Count);
+        
+        // Create the command object with the user ID and role IDs
+        var command = new AssignRolesCommand(userId, request.RoleIds);
+
+        // Send the command via the mediator
+        var result = await mediator.Send(command);
+        if (result.IsFailure)
+        {
+            // Check if the error indicates that the user was not found
+            if (result.Error.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new { error = result.Error });
+            }
+            // Return a Bad Request response for other errors
+            return BadRequest(new { error = result.Error });
+        }
+        // Return the successful result
+        return Ok(result.Value);
+    }
 }
 
 /// <summary>
@@ -255,3 +296,9 @@ public class UserManagementController(IMediator mediator, ILogger<UserManagement
 /// <param name="IsActive">A value indicating whether the user should be set as active. Specify <see langword="true"/> to activate the user;
 /// otherwise, <see langword="false"/> to deactivate.</param>
 public record ToggleUserStatusRequest(bool IsActive);
+
+/// <summary>
+/// Represents a request to assign roles to a user.
+/// </summary>
+/// <param name="RoleIds">The list of role identifiers to assign to the user.</param>
+public record AssignRolesRequest(List<Guid> RoleIds);
