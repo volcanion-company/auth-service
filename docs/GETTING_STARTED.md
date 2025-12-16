@@ -786,8 +786,12 @@ Authorization: Bearer YOUR_JWT_TOKEN
    # Rollback
    dotnet ef database update PreviousMigrationName
    ```
+4. **Seeding:**
+   ```bash
+   # Seeding with skip migration
+   .\setup.ps1 -SkipMigration
 
-4. **Logging:**
+5. **Logging:**
    ```bash
    # View structured logs
    docker logs volcanion-api --follow
