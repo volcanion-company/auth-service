@@ -28,7 +28,7 @@ public static class UserSeeder
         var users = new List<User>();
 
         // Admin user
-        var adminEmail = Email.Create("admin@volcanion.com").Value;
+        var adminEmail = Email.Create("admin@volcanion.vn").Value;
         var adminPassword = Password.Create("Admin@123456").Value;
         var hashedAdminPassword = Password.CreateFromHash(passwordHasher.HashPassword(adminPassword.Hash));
         var adminFullName = FullName.Create("System", "Administrator").Value;
@@ -37,7 +37,7 @@ public static class UserSeeder
         users.Add(adminUser);
 
         // Manager user
-        var managerEmail = Email.Create("manager@volcanion.com").Value;
+        var managerEmail = Email.Create("manager@volcanion.vn").Value;
         var managerPassword = Password.Create("Manager@123456").Value;
         var hashedManagerPassword = Password.CreateFromHash(passwordHasher.HashPassword(managerPassword.Hash));
         var managerFullName = FullName.Create("John", "Manager").Value;
@@ -46,7 +46,7 @@ public static class UserSeeder
         users.Add(managerUser);
 
         // Regular users
-        var user1Email = Email.Create("user1@volcanion.com").Value;
+        var user1Email = Email.Create("user1@volcanion.vn").Value;
         var user1Password = Password.Create("User@123456").Value;
         var hashedUser1Password = Password.CreateFromHash(passwordHasher.HashPassword(user1Password.Hash));
         var user1FullName = FullName.Create("Alice", "Johnson").Value;
@@ -54,7 +54,7 @@ public static class UserSeeder
         user1.VerifyEmail();
         users.Add(user1);
 
-        var user2Email = Email.Create("user2@volcanion.com").Value;
+        var user2Email = Email.Create("user2@volcanion.vn").Value;
         var user2Password = Password.Create("User@123456").Value;
         var hashedUser2Password = Password.CreateFromHash(passwordHasher.HashPassword(user2Password.Hash));
         var user2FullName = FullName.Create("Bob", "Smith").Value;
@@ -63,7 +63,7 @@ public static class UserSeeder
         users.Add(user2);
 
         // Guest user
-        var guestEmail = Email.Create("guest@volcanion.com").Value;
+        var guestEmail = Email.Create("guest@volcanion.vn").Value;
         var guestPassword = Password.Create("Guest@123456").Value;
         var hashedGuestPassword = Password.CreateFromHash(passwordHasher.HashPassword(guestPassword.Hash));
         var guestFullName = FullName.Create("Guest", "User").Value;
@@ -71,7 +71,7 @@ public static class UserSeeder
         users.Add(guestUser);
 
         // Developer user
-        var devEmail = Email.Create("developer@volcanion.com").Value;
+        var devEmail = Email.Create("developer@volcanion.vn").Value;
         var devPassword = Password.Create("Dev@123456").Value;
         var hashedDevPassword = Password.CreateFromHash(passwordHasher.HashPassword(devPassword.Hash));
         var devFullName = FullName.Create("Charlie", "Developer").Value;
@@ -80,7 +80,7 @@ public static class UserSeeder
         users.Add(devUser);
 
         // Support user
-        var supportEmail = Email.Create("support@volcanion.com").Value;
+        var supportEmail = Email.Create("support@volcanion.vn").Value;
         var supportPassword = Password.Create("Support@123456").Value;
         var hashedSupportPassword = Password.CreateFromHash(passwordHasher.HashPassword(supportPassword.Hash));
         var supportFullName = FullName.Create("Sarah", "Support").Value;

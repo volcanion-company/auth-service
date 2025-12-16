@@ -6,8 +6,11 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Prometheus;
 using Serilog;
+using Serilog.Events;
 using VolcanionAuth.API.Conventions;
 using VolcanionAuth.API.Extensions;
 using VolcanionAuth.API.Middleware;
@@ -18,19 +21,61 @@ using VolcanionAuth.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 // Serilog Configuration
+// Lấy base log directory (nếu có)
+var logPath = Path.Combine(
+    builder.Configuration["Logger:BaseDirectory"] ?? "",
+    "logs");
+
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
     .Enrich.WithMachineName()
     .Enrich.WithThreadId()
-    .WriteTo.Console()
-    .WriteTo.File(
-        path: "logs/volcanion-auth-.txt",
+
+    // Console – chỉ info trở lên
+    .WriteTo.Console(
+        restrictedToMinimumLevel: LogEventLevel.Information)
+
+    // App log
+    .WriteTo.Async(a => a.File(
+        Path.Combine(logPath, "app/log-.txt"),
         rollingInterval: RollingInterval.Day,
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+        retainedFileCountLimit: 14))
+
+    // Error log
+    .WriteTo.Async(a => a.File(
+        Path.Combine(logPath, "error/log-.txt"),
+        restrictedToMinimumLevel: LogEventLevel.Error,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30))
+
+#if DEBUG
+    // Debug log – chỉ bật khi dev
+    .WriteTo.Async(a => a.File(
+        Path.Combine(logPath, "debug/log-.txt"),
+        restrictedToMinimumLevel: LogEventLevel.Debug,
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7))
+#endif
+
     .CreateLogger();
 
 builder.Host.UseSerilog();
+
+// OpenTelemetry Configuration
+builder.Services.AddOpenTelemetry().WithTracing(tracer =>
+{
+    tracer
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("VolcanionAuthService")
+        .SetResourceBuilder(
+            ResourceBuilder.CreateDefault()
+                .AddService(
+                    serviceName: builder.Environment.ApplicationName,
+                    serviceVersion: "1.0.0"))
+        .AddOtlpExporter();
+});
 
 // Add services to the container
 builder.Services.AddControllers(options =>
@@ -180,6 +225,24 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Correlation ID Middleware
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Headers.TryGetValue("X-Correlation-Id", out var correlationId))
+    {
+        correlationId = Guid.NewGuid().ToString();
+        context.Request.Headers["X-Correlation-Id"] = correlationId;
+    }
+
+    context.Response.Headers["X-Correlation-Id"] = correlationId;
+
+    using (Serilog.Context.LogContext.PushProperty(
+        "CorrelationId", correlationId.ToString()))
+    {
+        await next();
+    }
+});
 
 app.UseSerilogRequestLogging();
 
