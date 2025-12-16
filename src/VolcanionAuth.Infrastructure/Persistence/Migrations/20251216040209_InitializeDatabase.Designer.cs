@@ -12,8 +12,8 @@ using VolcanionAuth.Infrastructure.Persistence;
 namespace VolcanionAuth.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(WriteDbContext))]
-    [Migration("20251210032754_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251216040209_InitializeDatabase")]
+    partial class InitializeDatabase
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
