@@ -1,110 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Primary (Write)
-  postgres-primary:
-    image: postgres:16-alpine
-    container_name: volcanion-postgres-primary
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: volcanion_auth
-      POSTGRES_HOST_AUTH_METHOD: md5
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-primary-data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    command: >
-      postgres
-      -c wal_level=replica
-      -c max_wal_senders=3
-      -c max_replication_slots=3
-      -c hot_standby=on
-    networks:
-      - volcanion-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # PostgreSQL Replica 1 (Read)
-  postgres-replica-1:
-    image: postgres:16-alpine
-    container_name: volcanion-postgres-replica-1
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      PGUSER: postgres
-      PGPASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres-replica-1-data:/var/lib/postgresql/data
-    depends_on:
-      postgres-primary:
-        condition: service_healthy
-    networks:
-      - volcanion-network
-    command: >
-      bash -c "
-      until pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -v -P -W; do
-        echo 'Waiting for primary to be ready...';
-        sleep 1;
-      done;
-      echo 'standby_mode = on' > /var/lib/postgresql/data/standby.signal;
-      echo \"primary_conninfo = 'host=postgres-primary port=5432 user=postgres password=postgres'\" >> /var/lib/postgresql/data/postgresql.auto.conf;
-      postgres
-      "
-
-  # PostgreSQL Replica 2 (Read)
-  postgres-replica-2:
-    image: postgres:16-alpine
-    container_name: volcanion-postgres-replica-2
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      PGUSER: postgres
-      PGPASSWORD: postgres
-    ports:
-      - "5434:5432"
-    volumes:
-      - postgres-replica-2-data:/var/lib/postgresql/data
-    depends_on:
-      postgres-primary:
-        condition: service_healthy
-    networks:
-      - volcanion-network
-    command: >
-      bash -c "
-      until pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U postgres -v -P -W; do
-        echo 'Waiting for primary to be ready...';
-        sleep 1;
-      done;
-      echo 'standby_mode = on' > /var/lib/postgresql/data/standby.signal;
-      echo \"primary_conninfo = 'host=postgres-primary port=5432 user=postgres password=postgres'\" >> /var/lib/postgresql/data/postgresql.auto.conf;
-      postgres
-      "
-
-  # Redis
-  redis:
-    image: redis:7-alpine
-    container_name: volcanion-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes --requirepass redis_password
-    networks:
-      - volcanion-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Volcanion Auth API
   volcanion-auth-api:
     build:
       context: .
@@ -112,66 +6,22 @@ services:
     container_name: volcanion-auth-api
     ports:
       - "8080:8080"
-      - "8081:8081"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__WriteDatabase=Host=postgres-primary;Port=5432;Database=volcanion_auth;Username=postgres;Password=postgres;
-      - ConnectionStrings__ReadDatabase=Host=postgres-replica-1;Port=5432;Database=volcanion_auth;Username=postgres;Password=postgres;
-      - ConnectionStrings__Redis=redis:6379,password=redis_password
+      - ConnectionStrings__WriteDatabase=Host=pg-primary;Port=5432;Database=volcanion_auth;Username=postgres;Password=postgres;
+      - ConnectionStrings__ReadDatabase=Host=pg-replica1;Port=5433;Database=volcanion_auth;Username=postgres;Password=postgres;
+      - ConnectionStrings__Redis=volcanion-redis:6379,password=redis_password
       - Jwt__SecretKey=YourVerySecretKeyThatIsAtLeast32CharactersLongForHS256Algorithm
       - Jwt__Issuer=VolcanionAuth
       - Jwt__Audience=VolcanionAuthAPI
-    depends_on:
-      postgres-primary:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - volcanion-network
+    networks: [pgnet]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: volcanion-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - volcanion-network
-
-  # Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: volcanion-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana-data:/var/lib/grafana
-    networks:
-      - volcanion-network
-
 networks:
-  volcanion-network:
-    driver: bridge
-
-volumes:
-  postgres-primary-data:
-  postgres-replica-1-data:
-  postgres-replica-2-data:
-  redis-data:
-  prometheus-data:
-  grafana-data:
+  pgnet:
+    external: true
